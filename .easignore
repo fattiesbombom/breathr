@@ -1,0 +1,5 @@
+# Ignore everything except Frontend/Frontend
+*
+!Frontend/
+Frontend/*
+!Frontend/Frontend/
