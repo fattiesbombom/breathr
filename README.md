@@ -38,7 +38,7 @@ Follow ENV_SETUP.md for .env files across Backend, supabase-server, Frontend. Ne
 - `GET /health`: Status check.
 - 
 ## Database Schema
-Uses Supabase auth.users + public.profiles (username UNIQUE, deathcount, usericon). Friendships table with pending/accepted status, indexes, RLS for own profile access. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/127342205/b6c37e81-303c-4ff9-a2f5-ad78034585f8/supabase-schema.sql)
+Uses Supabase auth.users + public.profiles (username UNIQUE, deathcount, usericon). Friendships table with pending/accepted status, indexes, RLS for own profile access.
 
 ## Scripts
 - `test_bot.py`: Bot tests. 
