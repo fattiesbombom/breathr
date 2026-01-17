@@ -82,7 +82,8 @@ def handle_updates(updates, user_db):
             else:
                 print(f"ℹ️ User {username} already in database")
             
-            # --- STEP 2: REACT TO COMMANDS ---
+
+
             text = message.get('text', '')
             print(f"📨 Received: '{text}' from {username} (chat_id: {chat_id})")
             
