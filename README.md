@@ -36,7 +36,7 @@ Follow ENV_SETUP.md for .env files across Backend, supabase-server, Frontend. Ne
 - `POST /send-message`: Alt with target_username. 
 - `GET /users`: List usernames. 
 - `GET /health`: Status check.
-- 
+  
 ## Database Schema
 Uses Supabase auth.users + public.profiles (username UNIQUE, deathcount, usericon). Friendships table with pending/accepted status, indexes, RLS for own profile access.
 
