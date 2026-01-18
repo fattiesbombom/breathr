@@ -1,4 +1,4 @@
-# PanicBreatheBot
+# breathr
 
 A full-stack Telegram breathing/panic app with Supabase backend, Flask API, and Expo frontend. Features user profiles, friendships, death counters (game-like resets), custom icons, and Telegram bot integration for messaging.
 Run locally with one command for development.
@@ -15,6 +15,8 @@ Run locally with one command for development.
 2. Copy `.env.example` to `.env`, add `TELEGRAM_BOT_TOKEN`. 
 3. For Supabase: `cd supabase-server`, copy `.env.example` to `.env`, add credentials; `npm install`. 
 5. Run `python start_servers.py`.
+6. Open a new terminal and 'cd Frontend/Frontend'.
+7. Run 'npm expo start'or 'npm start'.
 
 Flask at http://0.0.0.0:5000, Supabase Studio at http://localhost:3000.
 
