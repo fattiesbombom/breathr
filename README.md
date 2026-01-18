@@ -42,10 +42,6 @@ Follow ENV_SETUP.md for .env files across Backend, supabase-server, Frontend. Ne
 ## Database Schema
 Uses Supabase auth.users + public.profiles (username UNIQUE, deathcount, usericon). Friendships table with pending/accepted status, indexes, RLS for own profile access.
 
-## Scripts
-- `test_bot.py`: Bot tests. 
-- `send_msg.py`: Msg utils.
-
 ## Notes
 - users.json persists chat IDs locally (auto-saved). 
 - "Death count" tracks resets/failures in breathing exercises. 
