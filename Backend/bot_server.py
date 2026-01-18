@@ -16,8 +16,6 @@ if not TOKEN:
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(SCRIPT_DIR, 'users.json')  # Always use absolute path
 
-# --- HELPER FUNCTIONS ---
-
 def load_database():
     """Loads the saved users from the JSON file."""
     try:
@@ -59,8 +57,6 @@ def send_message(chat_id, text):
     requests.post(url, json=payload)
 
 
-# ... (keep existing CONFIGURATION and HELPER FUNCTIONS the same) ...
-
 def handle_updates(updates, user_db):
     """Processes new messages."""
     highest_update_id = 0
@@ -78,8 +74,6 @@ def handle_updates(updates, user_db):
                 # Fallback to first_name if no username
                 username = message['from'].get('first_name', 'Unknown')
                 print(f"⚠️ User has no username, using first_name: {username}")
-            
-            # --- STEP 1: LEARN & STORE ---
             # Save user immediately when they interact with bot
             if username not in user_db or user_db[username] != chat_id:
                 user_db[username] = chat_id
@@ -88,7 +82,8 @@ def handle_updates(updates, user_db):
             else:
                 print(f"ℹ️ User {username} already in database")
             
-            # --- STEP 2: REACT TO COMMANDS ---
+
+
             text = message.get('text', '')
             print(f"📨 Received: '{text}' from {username} (chat_id: {chat_id})")
             
