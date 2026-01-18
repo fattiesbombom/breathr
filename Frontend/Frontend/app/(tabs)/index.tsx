@@ -5,6 +5,7 @@ import {
   AppState, AppStateStatus,
 } from 'react-native';
 import { useRouter, useSegments } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -203,11 +204,20 @@ export default function HomeScreen() {
     setLoading(true);
     try {
       console.log('🔐 Attempting login...', { identifier });
+      console.log(`   URL: ${SUPABASE_API_URL}/auth/login`);
+      
+      // Add timeout to fetch
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch(`${SUPABASE_API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
       const data = await response.json();
       console.log('📥 Login response:', { status: response.status, hasSession: !!data.session, error: data.error });
       
@@ -269,7 +279,11 @@ export default function HomeScreen() {
       }
     } catch (error: any) {
       console.error('❌ Login network error:', error);
-      setAuthError(error.message || `Network error. Make sure the Supabase server is running at ${SUPABASE_API_URL}`);
+      if (error.name === 'AbortError') {
+        setAuthError(`Request timed out. Is the server running at ${SUPABASE_API_URL}? If using Expo Go on a device, use your computer's IP address instead of localhost.`);
+      } else {
+        setAuthError(error.message || `Network error. Make sure the Supabase server is running at ${SUPABASE_API_URL}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -280,12 +294,20 @@ export default function HomeScreen() {
     setLoading(true);
     try {
       console.log('🔐 Attempting signup...', { email, username });
+      console.log(`   URL: ${SUPABASE_API_URL}/auth/signup`);
+      
+      // Add timeout to fetch
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch(`${SUPABASE_API_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, username, age: age || null }),
+        signal: controller.signal,
       });
       
+      clearTimeout(timeoutId);
       const data = await response.json();
       console.log('📥 Signup response:', { status: response.status, data });
       
@@ -329,7 +351,11 @@ export default function HomeScreen() {
       }
     } catch (error: any) {
       console.error('❌ Signup network error:', error);
-      setAuthError(error.message || `Network error. Make sure the Supabase server is running at ${SUPABASE_API_URL}`);
+      if (error.name === 'AbortError') {
+        setAuthError(`Request timed out. Is the server running at ${SUPABASE_API_URL}? If using Expo Go on a device, use your computer's IP address instead of localhost.`);
+      } else {
+        setAuthError(error.message || `Network error. Make sure the Supabase server is running at ${SUPABASE_API_URL}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -447,6 +473,8 @@ export default function HomeScreen() {
   };
 
   const handleLogout = async () => {
+    console.log('🚪 [LOGOUT] Starting logout process...');
+    
     // Stop all timers and intervals first
     shouldStopSpamRef.current = true;
     [timerIntervalRef, alertTimerIntervalRef, notificationIntervalRef, spamMessageIntervalRef].forEach(ref => {
@@ -458,15 +486,44 @@ export default function HomeScreen() {
     
     try {
       if (accessToken) {
-        await fetch(`${SUPABASE_API_URL}/auth/logout`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${accessToken}` },
-        });
+        // Add timeout to logout request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        try {
+          const response = await fetch(`${SUPABASE_API_URL}/auth/logout`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            console.log('✅ [LOGOUT] Server logout successful');
+          } else {
+            const data = await response.json().catch(() => ({}));
+            console.log('⚠️ [LOGOUT] Server response not OK:', response.status, data);
+          }
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          if (fetchError.name !== 'AbortError') {
+            console.log('⚠️ [LOGOUT] Request error:', fetchError.message);
+          }
+        }
       }
-    } catch (e) {
-      console.log('Logout error:', e);
+    } catch (e: any) {
+      console.log('⚠️ [LOGOUT] Error:', e.message);
     }
-    await AsyncStorage.removeItem('auth_session');
+    
+    // Always clear local storage and state, even if server logout fails
+    try {
+      await AsyncStorage.removeItem('auth_session');
+      console.log('✅ [LOGOUT] Auth session cleared from storage');
+    } catch (e) {
+      console.log('⚠️ [LOGOUT] Error clearing storage:', e);
+    }
+    
+    // Clear all state
     setIsAuthenticated(false);
     setUserId(null);
     setUserEmail(null);
@@ -482,6 +539,8 @@ export default function HomeScreen() {
     setTimer(BREATHE_TIMER);
     setAlertTimer(ALERT_TIMER);
     setMessagesSent(0);
+    
+    console.log('✅ [LOGOUT] Logout complete - all state cleared');
   };
 
   // ============== EFFECTS ==============
@@ -492,6 +551,15 @@ export default function HomeScreen() {
     checkAuthStatus();
     requestNotificationPermissions();
   }, []);
+
+  // Re-check auth status when screen comes into focus (e.g., after logout from settings)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Re-check auth status when returning to this screen
+      // This ensures logout from settings page properly shows auth screen
+      checkAuthStatus();
+    }, [])
+  );
 
   useEffect(() => {
     if (isAuthenticated) {

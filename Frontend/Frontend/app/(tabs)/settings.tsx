@@ -162,18 +162,49 @@ export default function SettingsScreen() {
 
   const handleLogout = async () => {
     try {
+      console.log('🚪 Attempting logout...');
       const token = await getAccessToken();
       if (token) {
-        await fetch(`${SUPABASE_API_URL}/auth/logout`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
+        // Add timeout to logout request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        try {
+          const response = await fetch(`${SUPABASE_API_URL}/auth/logout`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            console.log('✅ Logout successful');
+          } else {
+            const data = await response.json().catch(() => ({}));
+            console.log('⚠️ Logout response not OK:', response.status, data);
+          }
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          if (fetchError.name !== 'AbortError') {
+            console.log('⚠️ Logout request error:', fetchError.message);
+          }
+        }
       }
-    } catch (e) {
-      console.log('Logout error:', e);
+    } catch (e: any) {
+      console.log('⚠️ Logout error:', e.message);
     }
-    await AsyncStorage.removeItem('auth_session');
-    router.replace('/(tabs)');
+    
+    // Always clear local storage and navigate, even if server logout fails
+    try {
+      await AsyncStorage.removeItem('auth_session');
+      console.log('✅ Auth session cleared');
+    } catch (e) {
+      console.log('⚠️ Error clearing auth session:', e);
+    }
+    
+    // Navigate back to main screen (which will show auth screen)
+    // Use replace to prevent going back to settings, and use index to ensure we go to the root
+    router.replace('/(tabs)/');
   };
 
   const handleBack = () => {

@@ -45,6 +45,13 @@ export default function TabLayout() {
           href: null, // Hidden from default tab bar
         }}
       />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: 'Leaderboard',
+          href: null, // Hidden from default tab bar
+        }}
+      />
     </Tabs>
   );
 }

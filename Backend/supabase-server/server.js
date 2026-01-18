@@ -56,6 +56,76 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================================================
+// SUPABASE CONNECTION CHECK
+// ============================================================================
+
+/**
+ * Test Supabase connection on startup
+ */
+async function testSupabaseConnection() {
+  console.log('\n' + '='.repeat(60));
+  console.log('🔍 Testing Supabase Connection...');
+  console.log('='.repeat(60));
+  
+  // Check if environment variables are set
+  const hasUrl = !!process.env.SUPABASE_URL;
+  const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const hasAnonKey = !!process.env.SUPABASE_ANON_KEY;
+  
+  console.log(`📋 Environment Variables:`);
+  console.log(`   SUPABASE_URL: ${hasUrl ? '✅ Set' : '❌ Missing'}`);
+  console.log(`   SUPABASE_SERVICE_ROLE_KEY: ${hasServiceKey ? '✅ Set' : '❌ Missing'}`);
+  console.log(`   SUPABASE_ANON_KEY: ${hasAnonKey ? '✅ Set' : '❌ Missing'}`);
+  
+  if (!hasUrl || !hasServiceKey || !hasAnonKey) {
+    console.log('\n⚠️  WARNING: Missing environment variables!');
+    console.log('   Please create a .env file with your Supabase credentials.');
+    console.log('   See README.md for setup instructions.\n');
+    return false;
+  }
+  
+  // Test admin client connection by making a simple query
+  try {
+    console.log('\n🔌 Testing Supabase Admin Client...');
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .limit(1);
+    
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 is "no rows returned" which is fine for empty table
+      console.log(`   ❌ Connection failed: ${error.message}`);
+      console.log(`   Error code: ${error.code}`);
+      return false;
+    }
+    
+    console.log('   ✅ Admin client connected successfully');
+  } catch (error) {
+    console.log(`   ❌ Connection error: ${error.message}`);
+    return false;
+  }
+  
+  // Test anon client by checking auth service
+  try {
+    console.log('🔌 Testing Supabase Anon Client...');
+    // Just check if the client is initialized (can't test auth without credentials)
+    if (supabaseAnon.auth) {
+      console.log('   ✅ Anon client initialized successfully');
+    } else {
+      console.log('   ❌ Anon client not initialized');
+      return false;
+    }
+  } catch (error) {
+    console.log(`   ❌ Anon client error: ${error.message}`);
+    return false;
+  }
+  
+  console.log('\n✅ Supabase connection verified!');
+  console.log('='.repeat(60) + '\n');
+  return true;
+}
+
+// ============================================================================
 // AUTHENTICATION MIDDLEWARE
 // ============================================================================
 
@@ -133,16 +203,20 @@ const checkOnboardingComplete = async (req, res, next) => {
  */
 app.post('/auth/login', async (req, res) => {
   try {
+    console.log('\n🔐 [LOGIN] Request received');
     const { email, password, username, identifier } = req.body;
+    console.log(`   Identifier: ${email || identifier || username || 'none'}`);
 
     const loginId = (email || identifier || username || '').trim();
     if (!loginId || !password) {
+      console.log('   ❌ Missing credentials');
       return res.status(400).json({ error: 'Email/username and password are required' });
     }
 
     // Allow login by username or email
     let emailToUse = loginId;
     if (!loginId.includes('@')) {
+      console.log('   🔍 Looking up email for username...');
       const { data: userRow, error: lookupError } = await supabaseAdmin
         .from('profiles')
         .select('email')
@@ -150,31 +224,47 @@ app.post('/auth/login', async (req, res) => {
         .single();
 
       if (lookupError || !userRow?.email) {
+        console.log(`   ❌ Username not found or lookup error: ${lookupError?.message || 'No email found'}`);
         return res.status(401).json({ error: 'Invalid login credentials' });
       }
 
       emailToUse = userRow.email;
+      console.log(`   ✅ Found email: ${emailToUse}`);
+    } else {
+      console.log(`   Using email directly: ${emailToUse}`);
     }
 
     // Sign in with Supabase Auth
+    console.log('   🔐 Calling Supabase auth.signInWithPassword()...');
     const { data, error } = await supabaseAnon.auth.signInWithPassword({
       email: emailToUse,
       password,
     });
 
     if (error) {
+      console.log(`   ❌ Supabase auth error: ${error.message}`);
       return res.status(401).json({ error: error.message });
     }
+    console.log(`   ✅ Auth successful for user: ${data.user?.id}`);
 
     // Get user profile including guardian_username
-    const { data: userProfile } = await supabaseAdmin
+    console.log('   📋 Fetching user profile...');
+    const { data: userProfile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('guardian_username, username, age, user_icon, death_count')
       .eq('id', data.user.id)
       .single();
 
+    if (profileError) {
+      console.log(`   ⚠️ Profile fetch error: ${profileError.message}`);
+    }
+
     const userIcon = userProfile?.user_icon || null;
-    console.log('🔐 Login - User icon from DB:', { userId: data.user.id, userIcon, userIconType: typeof userIcon });
+    console.log(`   ✅ Login successful!`);
+    console.log(`      User ID: ${data.user.id}`);
+    console.log(`      Username: ${userProfile?.username || 'none'}`);
+    console.log(`      Guardian: ${userProfile?.guardian_username || 'none'}`);
+    console.log(`      Onboarding complete: ${!!userProfile?.guardian_username}`);
 
     res.json({
       user: {
@@ -189,7 +279,8 @@ app.post('/auth/login', async (req, res) => {
       onboardingComplete: !!userProfile?.guardian_username,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ [LOGIN] Unexpected error:', error.message);
+    console.error('   Stack:', error.stack);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -274,7 +365,10 @@ app.post('/auth/reset-password', async (req, res) => {
  */
 app.post('/auth/signup', async (req, res) => {
   try {
+    console.log('\n📝 [SIGNUP] Request received');
     const { email, password, username, age } = req.body;
+    console.log(`   Email: ${email}`);
+    console.log(`   Username: ${username}`);
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -285,6 +379,7 @@ app.post('/auth/signup', async (req, res) => {
     }
 
     // Check if username already exists
+    console.log('   🔍 Checking if username exists...');
     const { data: existingUser, error: checkError } = await supabaseAdmin
       .from('profiles')
       .select('username')
@@ -305,6 +400,7 @@ app.post('/auth/signup', async (req, res) => {
 
     // Sign up with Supabase Auth
     // Note: If email confirmation is enabled, session will be null
+    console.log('   🔐 Calling Supabase auth.signUp()...');
     const { data, error } = await supabaseAnon.auth.signUp({
       email,
       password,
@@ -378,6 +474,9 @@ app.post('/auth/signup', async (req, res) => {
       .eq('id', data.user.id)
       .single();
 
+    console.log('   ✅ Signup successful!');
+    console.log(`   User ID: ${data.user?.id}`);
+    console.log(`   Session: ${data.session ? 'Yes' : 'No (email confirmation required)'}`);
     res.json({
       user: {
         ...data.user,
@@ -390,7 +489,8 @@ app.post('/auth/signup', async (req, res) => {
       onboardingComplete: false, // New users need to set guardian_username
     });
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('❌ [SIGNUP] Error:', error.message);
+    console.error('   Stack:', error.stack);
     res.status(500).json({ error: 'Signup failed' });
   }
 });
@@ -399,18 +499,32 @@ app.post('/auth/signup', async (req, res) => {
  * POST /auth/logout
  * Logout user
  */
-app.post('/auth/logout', authenticateUser, async (req, res) => {
+app.post('/auth/logout', async (req, res) => {
   try {
-    const { error } = await supabaseAdmin.auth.signOut();
+    console.log('\n🚪 [LOGOUT] Request received');
     
-    if (error) {
-      return res.status(400).json({ error: error.message });
+    // Try to authenticate, but don't fail if token is invalid/expired
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1];
+      try {
+        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+        if (!authError && user) {
+          console.log(`   User ID: ${user.id}`);
+        }
+      } catch (e) {
+        console.log('   ⚠️ Token validation failed (may be expired), continuing with logout anyway');
+      }
     }
-
+    
+    // Always return success - client will clear local state regardless
+    // Supabase sessions are stateless JWT tokens, so clearing client-side is sufficient
+    console.log('   ✅ Logout successful (client-side cleanup)');
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ error: 'Logout failed' });
+    console.error('❌ [LOGOUT] Unexpected error:', error);
+    // Still return success so client can clear local state
+    res.json({ message: 'Logged out successfully' });
   }
 });
 
@@ -1225,8 +1339,33 @@ app.get('/api/profile', authenticateUser, checkOnboardingComplete, async (req, r
 // HEALTH CHECK
 // ============================================================================
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  const hasUrl = !!process.env.SUPABASE_URL;
+  const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const hasAnonKey = !!process.env.SUPABASE_ANON_KEY;
+  
+  let supabaseConnected = false;
+  if (hasUrl && hasServiceKey && hasAnonKey) {
+    try {
+      // Quick test query
+      const { error } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .limit(1);
+      supabaseConnected = !error || error.code === 'PGRST116'; // PGRST116 = no rows (OK)
+    } catch (err) {
+      supabaseConnected = false;
+    }
+  }
+  
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    supabase: {
+      configured: hasUrl && hasServiceKey && hasAnonKey,
+      connected: supabaseConnected
+    }
+  });
 });
 
 // ============================================================================
@@ -1242,7 +1381,10 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ============================================================================
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  
+  // Test Supabase connection on startup
+  await testSupabaseConnection();
 });

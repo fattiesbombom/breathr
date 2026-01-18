@@ -83,7 +83,7 @@ export const MonitoringScreen: React.FC<MonitoringScreenProps> = ({
           onAddGuardian={() => onShowAddModal(true)} 
           onSettings={onSettings}
           onFriends={() => router.push('/friends')}
-          onLeaderboard={() => router.push('/leaderboard')}
+          onLeaderboard={() => router.push('/(tabs)/leaderboard')}
           isShort={responsive.isShort}
         />
       </View>
